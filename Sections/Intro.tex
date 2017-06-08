@@ -8,15 +8,15 @@ Fenix is a framework enabling MPI applications to recover nearly transparently f
 losses of data and/or compute resources manifested as observable errors.
 It is based on the premise that the MPI standard itself provide facilities for trapping
 and isolating such errors, allowing the application to retain control of remaining unaffected
-resources, obviating  full program restart.
+resources, obviating full program restart.
 
 The current implementation of the Fenix specification \cite{fenixspec} leverages
 the  User Level Fault Mitigation (ULFM) \cite{bland2013post} proposal for extension
 of the MPI standard.
 A prototype implementation of the framework \cite{Gamell:2014} proved successful for
 an important production-level simulation code, but concerns have been raised about
-overheads incurred by Fenix and ULFM in the absence of failres, as well as of the
-applicability of these tools for tightly coupled HPC applications.
+overheads incurred by Fenix and ULFM in the absence of failures, as well as of the
+applicability of these tools for bulk-synchronous HPC applications.
 In this paper we address both concerns through the use of the Parallel Research Kernels
 \cite{van2016comparing}, and firmly conclude that ULFM adds no measurable
 overhead to applications, not even at very fine granularity.
@@ -25,8 +25,8 @@ Finally, our experience shows that Fenix+ULFM are perfectly suitable for tightly
 HPC applications.
 
 This paper is structured as follows.
-In Section \ref{sec:implem} we describe the salient features of the Fenix and ULFM
-implementations that potentially impact performance of MPI applications.
+In Section \ref{sec:implem} we briefly describe the salient features of Fenix and ULFM,
+and describe the implementation factors that potentially impact performance of MPI applications.
 In Section \ref{sec:PRK} we describe the Parallel Research Kernels and the modifications
 made to them to incorporate Fenix fault tolerance, including potential pitfalls.
 In Section \ref{sec:results} we present measurement data for the kernels,
