@@ -1,0 +1,5 @@
+\section{ULFM and Fenix}\label{sec:implem}
+ULFM adds a small set of functions to the MPI standard.
+Those used by Fenix are MPI\_Comm\_shrink, MPI\_Comm\_revoke, and MPI\_Comm\_agree.
+However, these functions are invoked only when an error occurs, and hence do
+not add the the MPI critical path.

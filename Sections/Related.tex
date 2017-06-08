@@ -1,0 +1,33 @@
+\section{Related work}\label{sec:related}
+Reinit \cite{laguna2016evaluating} functionality is similar to 
+Fenix', with these exceptions:
+it assumes non-shrinking recovery, whereas Fenix supports shrinking and 
+non-shrinking recovery within the same framework;
+it offers no facilities for data recovery;
+it is built directly into the MPI runtime, whereas Fenix is a library built
+on top of MPI--the current implementation uses ULFM, which our specification
+does not expose;
+it changes program structure, replacing the original \texttt{main} 
+with calls to cleanup handling, whereas Fenix-enabled codes retain 
+their original structure--they can skip all fault tolerance
+constructs via selective compilation or runtime tests;
+it supports direct use of \texttt{MPI\_COMM\_WORLD}, but to accomplish
+the same with Fenix requires the PMPI profiling interface. This prohibits use 
+of other PMPI tools together with Fenix. 
+Efforts within the MPI Forum target PMPI alternatives 
+supporting multiple tools simultaneously.
+
+Fault-Aware MPI \cite{Hassani15FAMPI} offers tunable  resilience
+by introduction of transactions around user-specified code blocks.
+It supports only asynchronous MPI communications.
+
+Adaptive MPI, leveraging Charm++'s \cite{charm++} runtime, supports shrinking 
+and non-shrinking recovery. 
+It differs from Fenix in that it does not use a production
+MPI runtime; it always maintains the same number of MPI ranks (implemented
+as user-level threads), but redistributes those among remaining resources in
+a shrinking recovery; it assumes and integrates data recovery through rollback, 
+whereas Fenix decouples process and data recovery.
+
+Without further reference we point to LFLR (Local Failure, Local Recovery) and
+RTS (Run-Through Stabilization) as precursors to Fenix and ULFM, respectively.

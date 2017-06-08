@@ -1,0 +1,68 @@
+\section{Scope and performance}\label{sec:experiments}
+To demonstrate Fenix' efficiency and suitability for a wide range of parallel computing patterns and 
+granularities, we apply it to a subset of the Parallel Research Kernels \cite{van2016comparing}.
+These represent data-parallel, medium-grain workloads with nearest-neighbor communications (Stencil),
+non-data-parallel, very fine-grain workloads with nearest-neighbor communications (Synch\_p2p), and 
+global-exchange-based, sliding-grain-size (Transpose) workloads, respectively.
+All are based on domain decomposition, and none fits the master/slave model that is often cited
+as the model best suited for recovery via approaches supported by ULFM \cite{laguna2014evaluating,
+laguna2016evaluating}.
+In addition to demonstrating wide suitability, we show the following overheads (relative to
+execution without any fault tolerance features) of the software
+stack components that make up the added resilience layer of these kernels as a function of the
+number of ranks used in a strong-scaling environment:
+ULFM in the absence of failures, ULFM+Fenix in the absence of failures, and ULFM+Fenix in the
+presence of failures.
+
+The strategy for storing recovery data is as follows. 
+We store the entire application array(s) only after a whole iteration of the kernel has
+completed.
+Because we use strong scaling, the entire data set size is constant, so that the size of 
+the recovery data to be stored in (and potentially retrieved from) a peer rank, as
+well as the computational work per iteration, are inversely proportional to the number of ranks. 
+Ignoring communication costs, roll-back time for a certain number of iterations will be close to 
+inversely proportional to the number of ranks as well.
+If errors are uniformly distributed in time and space, application failure frequency will be
+approximately proportional to the number of ranks. 
+Consequently, storing the application data set after a fixed number of iterations, regardless
+of the number of ranks, should be nearly optimal.
+We will always use a depth of zero, which means that Fenix does not maintain older copies of
+the application data, and would not be able to recover from a failure occurring during the 
+writing of the recovery data.
+
+While Fenix data storage and retrieval overheads do not depend on the application granularity,
+Fenix' overall does, since it intercepts \textit{all} MPI calls.
+
+\subsection{Stencil kernel}
+This kernel--functionally similar to that studied in \cite{Gamell:HPDC15}, applies a 
+scalar, data-parallel stencil operation to the interior of a 
+two-dimensional discretization grid of size $n\times{n}$. 
+The stencil, which represents a discrete divergence operator, 
+has radius $r=2$ for our experiments.  
+The implementation employs two-dimensional domain decompositions to minimize the surface to 
+volume ratio, and hence the communication volume. 
+Communication is required to obtain ghost point values from 
+logically nearest neighbors. 
+
+\subsection{Synch\_p2p kernel}
+This kernel involves a simple stencil-based problem.
+A two-dimensional array $A$ of size $n \times m$, representing scalar values at
+grid points, is distributed among the ranks in vertical strips. 
+We apply the following difference stencil:
+$A_{i,j}=A_{i-1,j}+A_{i,j-1}-A_{i-1,j-1}$, 
+with the condition that only updated array values or (fixed) boundary values
+may be used.
+The data dependencies are resolved using a 1D software pipeline.
+Synch\_p2p models the algorithmic structure of the well-known
+LU-SGS NAS Parallel Benchmark (NPB)~\cite{Bailey:1991:IJHPCA:NAS}.
+It is not data-parallel, and must synchronize frequently with its nearest neighbors in 
+the pipeline.
+
+\subsection{Transpose kernel}
+In this kernel a square matrix $B$ of order $n$ is divided
+into strips (columns) among the ranks, which  store its transpose $B^T$
+in matrix $A$.
+The matrices are distributed identically, necessitating a \textit{global} rearrangement
+of the data (all-to-all communication), as well as a \textit{local} rearrangement
+(per-rank transpose of matrix tiles).
+This type of operation is critical in FFT-based applications.

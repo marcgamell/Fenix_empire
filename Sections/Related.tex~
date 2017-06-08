@@ -1,0 +1,13 @@
+Reinit \cite{laguna2016evaluating} provides functionality that is similar to 
+Fenix', with these exceptions:
+it assumes non-shrinking recovery, whereas Fenix can support shrinking and 
+non-shrinking recovery within the same framework;
+it does not offer facilities for data recovery, these have to be written by
+the user; 
+it is built directly into the MPI runtime, whereas Fenix is a library built
+on top of MPI--the implementation currently uses ULFM, but the specification
+does not expose that;
+it changes the overal program structure, replacing main with calls to cleanup
+handling and the original main program, whereas Fenix-enabled codes retain 
+their original structure, and can be made to skip all fault tolerance
+constructs via selective compilation (\texttt{\#ifdef}) or runtime tests.

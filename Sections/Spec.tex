@@ -1,0 +1,247 @@
+\section{Fenix specification}\label{sec:spec}
+Fenix has two distinct interfaces: process recovery, and data recovery.
+The first allows an MPI application to recover from a permanent loss of MPI 
+processes (ranks) that cause MPI calls to fail.
+This is the most important and novel part of Fenix.
+Fenix' data recovery API could be replaced by, or used with, other mechanisms to 
+restore application data.
+\subsection{Process recovery}
+Fenix' basic assumption is that nominally fatal errors in MPI programs
+are detected by the runtime and reported via error codes.
+While default error response is application shutdown
+(\texttt{MPI\_ERRORS\_ARE\_FATAL}), Fenix overrides this, allowing remaining
+resources (MPI processes) to be informed of the failure, and to call MPI functions 
+to remove the lost resources from their respective communication contexts \cite{Gamell:2014}.
+
+To ease adoption of MPI fault tolerance, Fenix automatically captures 
+errors resulting from MPI library calls that experience a failure. 
+%
+Implementations of the Fenix specification can achieve this behavior
+leveraging error handlers or the MPI profiling interface.
+%
+Hence, Fenix users need \emph{not} replace MPI calls with calls to Fenix  
+(for example,\texttt{Fenix\_Send} instead of \texttt{MPI\_Send}).
+Subsequently, Fenix repairs communicators transparently and returns  execution 
+control to the application. 
+Its detailed behavior is determined by function \texttt{Fenix\_Init}, which
+also initializes the library.
+\begin{verbatim}
+void Fenix_Init(
+   MPI_Comm comm,
+   MPI_Comm *newcomm, 
+   int *role, 
+   int *argc, char ***argv, 
+   int spare_ranks, 
+   int spawn,
+   MPI_Info info,
+   int *error);
+\end{verbatim}
+Communicator \texttt{comm} (includes any slack)
+is used to create \textit{resilient} communicator \texttt{newcomm}. 
+Communicators derived from \texttt{newcomm} are automatically resilient.
+Errors returned by MPI calls involving resilient communicators are intercepted by Fenix,
+triggering repair of all resilient communicators, such that the application can resume execution.
+Control is returned to the application at the 
+logical exit of \texttt{Fenix\_Init}.
+
+Parameter \texttt{role} contains the calling rank's most recent history.
+Possible values are \texttt{FENIX\_ROLE\_\textit{X}\_RANK},
+with \texttt{\textit{X}} being \texttt{INITIAL}, \texttt{SURVIVOR}, or \texttt{RECOVERED},
+corresponding to ``no errors yet'', ``not affected by latest failure'', 
+and ``rank recovered, but has no useful application data'', respectively.
+
+Parameter \texttt{spare\_ranks} specifies how many ranks in \texttt{comm} are 
+sequestered in \texttt{Fenix\_Init}  to replace failed ranks, and
+\texttt{spawn} determines whether Fenix  may create new ranks (\texttt{MPI\_Comm\_spawn}) 
+to restore resilient communicators to their original size. 
+\texttt{spare\_ranks} and \texttt{spawn} together define Fenix' overall communicator
+repair policy. 
+If both are zero, resilient communicators are shrunk to exclude failed ranks after 
+an error.
+If only \texttt{spawn} is zero, Fenix draws on the spare 
+ranks pool to restore resilient communicators to their original size. 
+Once the pool is depleted, subsequent errors lead to communicator shrinkage.
+Parameter \texttt{info} conveys details about expected Fenix behavior
+that differs from the default.
+%as well as to allow \texttt{MPI\_Comm\_spawn} configuration.
+%{\color{red}Should we include an explanation of newcomm=NULL to make comm resilient through PMPI?}
+
+\begin{verbatim}
+int Fenix_Callback_register(
+   void (*recover)(MPI_Comm, int, void*),
+   void *callback_data);
+\end{verbatim}
+This function registers a callback function, to be invoked by \texttt{SURVIVOR}
+ranks after a failure has been recovered by Fenix, and right before resuming application
+execution.
+Multiple callback functions may be registered.
+
+\subsection{Data recovery}
+Once Fenix process recovery has returned an application to a consistent state, the user 
+needs to consider lost data.
+Sometimes no action is required, for example because the application
+is embarrassingly parallel Monte Carlo.
+However, in most HPC applications,  Fenix' prime target, ranks synchronize often, 
+and intermediate state of ranks lost due to error must be restored.
+We outline several plausible approaches, all supported by Fenix'
+process and data recovery facilities.
+However, the user  need not use Fenix for data recovery, and may, for example,
+use Global View Resilience \cite{chien2015versioned}, Scalable Checkpoint Restart
+\cite{moody2010detailed}, a combination of these and Fenix, etc.
+Fenix aims mostly at providing fast, in-memory redundant storage for data recovery,
+whereas GVR and SCR target file storage, where space is a much less scarce.
+\begin{enumerate}
+\item \textit{Non-shrinking recovery with full data retrieval.} \label{1}
+This is the most common case in bulk-synchronous HPC codes. 
+The programmer defines data/work decomposition that corresponds to a certain
+number of ranks.
+After an error, \texttt{SURVIVOR}s roll back their state to a prior time.
+Missing ranks are replaced with \texttt{RECOVERED} ranks who instantiate their
+state using non-local data retrieved by a simple Fenix function invocation.
+Time-accurate computations favor this approach.
+\item \textit{Non-shrinking recovery with local data retrieval only.}\label{2}
+\texttt{SURVIVOR}s roll back their state, but 
+\texttt{RECOVERED} ranks approximate their requisite data,
+for example by interpolation of logically ``nearby'' data.
+This approach, also good for bulk-synchronous codes, may apply to relaxation methods.
+\item \textit{Shrinking recovery with full data retrieval.}\label{3}
+If the user demands online recovery and
+resources are insufficient to replace defunct ranks, 
+Fenix shrinks damaged communicators.
+Now there is no simple, unique way to 
+assign recovered data to the reduced number of remaining ranks.
+More general, flexible Fenix data recovery functions are provided for alternate
+ways of retrieving and re-assigning such data.
+\item \textit{Shrinking recovery with local data retrieval only.}\label{4}
+This is a combination of methods \ref{2} and \ref{3}.
+\end{enumerate}
+
+To organize redundant storage for data recovery after a fault,
+Fenix offers \textit{data groups}, containers for sets of data objects 
+(\textit{members}) that are manipulated as a unit.
+Data groups also refer to the collection of ranks that
+cooperate in handling recovery data.
+This collection need not include all active ranks.
+Fenix adopts the convenient MPI vehicle of \textit{communicators} to
+indicate the subset of ranks involved.
+
+A data group is instantiated with the following function.
+\begin{verbatim}
+int Fenix_Data_group_create(
+   int group_id,
+   MPI_Comm comm, 
+   int start_time_stamp, 
+   int depth);
+\end{verbatim}
+
+It is called by all ranks in \texttt{comm}--with identical 
+parameter values--defining the group for all of them. 
+The label \texttt{group\_id} can be used to restore the group after a failure.
+Parameter \texttt{start\_time\_stamp} initializes a counter to identify versions
+of the recovery data associated with the data group, and \texttt{depth} is
+the number of successive versions of such data sets maintained by Fenix
+in addition to the latest.
+%Subsequent operations on the group are all collective over \texttt{comm}, but not
+%necessarily synchronizing.
+
+Once a data group has been created, the user can define its members, which describe
+the actual application data:
+\begin{verbatim}
+int Fenix_Data_member_create( 
+   int group_id, 
+   int member_id,
+   void *source_buffer, 
+   int count, 
+   MPI_Datatype datatype);
+\end{verbatim}
+The \texttt{member\_id} distinguishes between different group 
+members, \texttt{source\_buffer} is the address of the contiguous application data in memory,
+and \texttt{count} (may be different for different ranks) and \texttt{datatype} together 
+fix the data's extent.
+
+Once all group members have been defined, the user can invoke Fenix functions to store
+application data:
+\begin{verbatim}
+int Fenix_Data_member_store( 
+   int group_id, 
+   int member_id, 
+   Fenix_Data_subset subset_specifier);
+\end{verbatim}
+Set \texttt{member\_id} to  \texttt{FENIX\_DATA\_MEMBER\_ALL}
+to store all group members.
+Parameter \texttt{subset\_specifier} controls selective storage.
+%value \texttt{FENIX\_DATA\_SUBSET\_FULL} causes the entire member to be stored.
+Currently Fenix stores two copies of each member;
+one in the memory of the calling rank, the other in a peer rank's in \texttt{comm}.
+Upon failure \texttt{SURVIVOR}s restore their
+application data using the local copy, and \texttt{RECOVERED} ranks 
+fetch it from their peer. This technique, inspired by
+Charm++ \cite{charm++}, provides resilience through redundancy.
+%The level of resilience can be influenced by the 
+%location of the peer rank relative to the calling rank.
+%The latter may be set via a \textit{separation distance}, where a
+%peer's rank equals the calling rank plus the separation distance, modulo
+%communicator size. 
+%The default separation distance is half of the communicator size; this value
+%can be changed using a redundancy policy accessor function.
+%With contiguous ranks placement, a separation distance equal to the number 
+%of cores on a multi-core node nominally puts a rank's Fenix peer on another node.
+%provided the communicator spans multiple nodes.
+%This would allow a whole node to fail and still allow 
+%recovery via in-memory redundant data storage.
+
+To mark a version of the group's data as recoverable,
+it needs to be committed; Fenix labels the stored data with a time
+stamp (a \textit{snapshot}).
+Subsequent store operations of the same  group do not contribute
+to the same snapshot, and receive an incremented time stamp upon the next commit.
+\begin{verbatim}
+int Fenix_Data_commit(
+   int group_id,
+   int *time_stamp);
+\end{verbatim}
+
+When an error occurs and process recovery is non-shrinking, application data
+for a particular group member can be restored simply using the following collective function.
+\begin{verbatim}
+int Fenix_Data_member_restore(
+   int group_id, 
+   int member_id,
+   void *target_buffer, 
+   int max_count, 
+   int time_stamp);
+\end{verbatim}
+Upon return each rank in the repaired communicator can access the
+extracted snapshot at address \texttt{target\_buffer}, if
+it is within \texttt{max\_count} units of the member's MPI data type.
+
+When an error occurs and process recovery is shrinking, there will be fewer
+ranks after the failure than before. This case is supported by a more
+general data recovery function.
+\begin{verbatim}
+int Fenix_Data_member_restore_from_rank(
+   int group_id, 
+   int member_id, 
+   void *target_buffer, 
+   int max_count, 
+   int time_stamp,
+   int source_rank);
+\end{verbatim}
+This collective function names the source rank (pre-error) explicitly.
+Let the size of the affected communicator before and after the failure be $C_b$ and $C_a$,
+respectively. The calling rank is $R$.
+Calling \texttt{restore} twice, with \texttt{source\_rank} equal to $R$ and
+$C_a+R$, respectively, returns all application data, provided ranks
+$C_b-C_a$ through $C_a-1$ set \texttt{max\_count} to zero in the second
+round to avoid searching for non-existent data.
+Next, data needs to be redistributed among the ranks to avoid load imbalance.
+This is beyond the scope of Fenix.
+
+%In addition to the above, Fenix provides query functions, 
+%non-blocking  storage functions to improve performance,
+%various synchronization and implicit and explicit garbage collection functions, and functions to 
+%manipulate subsets.
+
+In addition to the above, Fenix provides query, synchronization, and
+implicit and explicit garbage collection functions, as well as non-blocking  
+storage functions to improve performance, and functions to manipulate subsets.
