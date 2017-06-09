@@ -1,0 +1,129 @@
+if [ $# == 0 ]; then
+  echo Please provide a meaningful suffix
+  exit
+fi
+ncase=20
+suffix=$1
+iterdivide=4
+#iterstart=10240
+#nstart=900
+iterstart=3
+nstart=57600
+root=$HOME/esg-prk-devel
+appdir=Transpose
+exe=transpose
+
+echo Starting plain OpenMPI tests
+cp common/make.defs.ompi common/make.defs
+cd $root/MPI1/$appdir
+
+n=$nstart
+iter=$iterstart
+make clean; make $exe RESTRICT_KEYWORD=1 LOOPGEN=1
+while [ $n -le 60000 ]; do 
+  filename=runompi.$n.$iter.out.$suffix
+  \rm -f $filename
+  touch $filename
+  flops=0
+  case=0
+  while [ $case -lt $ncase ]; do
+    outperf=`/home/rfvander/ompi-install/bin/mpirun -np 36 -bind-to-core  ./$exe $iter $n | grep Rate`
+    perf=`echo $outperf | awk '{ print $3 }'`
+    avg=`echo $outperf | awk '{ print $7 }'`
+    echo $perf $avg >> $filename
+    flops=`echo $flops + $perf | bc`
+    case=`expr $case + 1`
+  done
+  flopsavg=`echo "scale = 6; $flops / $ncase" | bc`
+  echo Done with OpenMPI $appdir, size $n flopsavg = $flopsavg >> $filename
+  n=`expr $n \* 2`
+  iter=`expr $iter / $iterdivide`
+done
+
+cd $root
+
+echo Starting OpenMPI + ULFM tests
+cp common/make.defs.ulfm common/make.defs
+cd $root/MPI1/$appdir
+
+n=$nstart
+iter=$iterstart
+make clean; make $exe RESTRICT_KEYWORD=1 LOOPGEN=1
+while [ $n -le 60000 ]; do 
+  filename=runompi+ulfm.$n.$iter.out.$suffix
+  \rm -f $filename
+  touch $filename
+  flops=0
+  case=0
+  while [ $case -lt $ncase ]; do
+    outperf=`/home/rfvander/ompi+ulfm-install/bin/mpirun -np 36 -bind-to-core -am ft-enable-mpi ./$exe $iter $n | grep Rate`
+    perf=`echo $outperf | awk '{ print $3 }'`
+    avg=`echo $outperf | awk '{ print $7 }'`
+    echo $perf $avg >> $filename
+    flops=`echo $flops + $perf | bc`
+    case=`expr $case + 1`
+  done
+  flopsavg=`echo "scale = 6; $flops / $ncase" | bc`
+  echo Done with OpenMPI + ULFM  $appdir, size $n flopsavg = $flopsavg >> $filename
+  n=`expr $n \* 2`
+  iter=`expr $iter / $iterdivide`
+done
+
+cd $root
+
+echo Starting plain Intel MPI tests
+cp common/make.defs.impi common/make.defs
+cd $root/MPI1/$appdir
+
+n=$nstart
+iter=$iterstart
+make clean; make $exe RESTRICT_KEYWORD=1 LOOPGEN=1
+while [ $n -le 60000 ]; do 
+  filename=runimpi.$n.$iter.out.$suffix
+  \rm -f $filename
+  touch $filename
+  flops=0
+  case=0
+  while [ $case -lt $ncase ]; do
+    outperf=`mpirun -np 36  ./$exe $iter $n | grep Rate`
+    perf=`echo $outperf | awk '{ print $3 }'`
+    avg=`echo $outperf | awk '{ print $7 }'`
+    echo $perf $avg >> $filename
+    flops=`echo $flops + $perf | bc`
+    case=`expr $case + 1`
+  done
+  flopsavg=`echo "scale = 6; $flops / $ncase" | bc`
+  echo Done with Intel MPI $appdir, size $n flopsavg = $flopsavg >> $filename
+  n=`expr $n \* 2`
+  iter=`expr $iter / $iterdivide`
+done
+
+#echo Starting Fenix tests
+#cd $root/FENIX/$appdir
+#
+#n=$nstart
+#iter=$iterstart
+#make clean; make $exe RESTRICT_KEYWORD=1 LOOPGEN=1
+#while [ $n -le 60000 ]; do 
+#  filename=runompi+ulfm+fenix.$n.$iter.out.$suffix
+#  \rm -f $filename
+#  touch $filename
+#  flops=0
+#  case=0
+#  while [ $case -lt $ncase ]; do
+#    outperf=`/home/rfvander/ompi+ulfm-install/bin/mpirun -np 36 -bind-to-core -am ft-enable-mpi ./$exe $iter $n 0 0 30000 0 2>/dev/null | grep Rate`
+#    perf=`echo $outperf | awk '{ print $3 }'`
+#    avg=`echo $outperf | awk '{ print $7 }'`
+#    echo $perf $avg >> $filename
+#    flops=`echo $flops + $perf | bc`
+#    case=`expr $case + 1`
+#  done
+#  flopsavg=`echo "scale = 6; $flops / $ncase" | bc`
+#  echo Done with Fenix $appdir, size $n flopsavg = $flopsavg >> $filename
+#  n=`expr $n \* 2`
+#  iter=`expr $iter / $iterdivide`
+#done
+
+#restore plain Intel MPI make.defs
+cd $root
+cp common/make.defs.impi common/make.defs
