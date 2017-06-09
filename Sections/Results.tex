@@ -1,0 +1,39 @@
+\section{Experimental results}\label{sec:results}
+We measured performance of the PRK on a shared memory workstation
+equipped with two 18-core
+Intel$\footnotesize{^{\textregistered}}$
+Xeon$\footnotesize{^{\textregistered}}$ E5-2699 processors at 2.30GHz,
+with total memory of 64 GB.
+In all cases we used the Intel\regtm{} C compiler icc
+version 18.0.0, Intel\regtm{} MPI Library for Linux version 5.0.
+We note that for the purpose of this investigation--measuring runtime
+overheads when no failures occur--a shared memory system
+presents the toughest challenge for the fault-tolerance enhanced runtimes.
+Overheads introduced by ULFM and Fenix are strictly local, and hence
+are fixed, regardless of system size.
+They are added to the communication costs incurred by MPI calls, which are
+very small on a shared memory system.
+Consequently, the effect of the overheads is magnified.
+
+We compare four different runtime configurations.
+At present the only MPI version that offers a robust implementation of ULFM
+is OpenMPI \cite{openmpi}.
+It can be built without fault tolerance (i.e. no overhead, label ``OpenMPI''), and with
+fault tolerance (ULFM is enabled, label ``ULFM'').
+In addition, it can be linked with the Fenix library (label ``Fenix'').
+We note that the version of OpenMPI that accommodates ULFM is not the latest production
+version.
+Finally, we also do runs with the Intel\regtm{} MPI library (for Linux, version 5.0),
+which is presumed to perform best of all MPI runtimes on an Intel-based system.
+All kernels operate on 2D (distributed) arrays that correspond to 2D grids or matrices.
+We pick a the following set of array sizes: 900, 1800, 3600, 7200, 14400, 28800,
+57600.
+For AMR we also need to pick a collection of sizes for the refinements.
+We set those to: 450, 900, 1800, 3600, 7200, and note that the largest background
+grid size of $57600^2$ points, combined with a refinement grid of $28800^2$
+points, does not fit in the workstation's memory, so we do not present results
+for that size.
+
+
+
+
