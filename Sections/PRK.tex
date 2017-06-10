@@ -2,7 +2,7 @@
 The Parallel Research Kernels \cite{van2016comparing,PRKrepo}
 are a suite of simple kernels designed to stress various aspects of parallel computing systems.
 We select the following subset of the kernels for the evaluation of Fenix.
-Stencil, an explicit, data-parallel stencil kernel that applies a simple 9-point star stencil
+Stencil, an explicit, data-parallel kernel that applies a simple 9-point star stencil
 operation to a scalar input array and accumulates the results in an output array; it is nominally medium grain.
 Transpose, a matrix transposition kernel in which a square matrix is divided into strips among the
 participating ranks, which subsequently must be transposed, and accumulated at the destination ranks using
@@ -16,14 +16,15 @@ but with the added complexity of the refinements.
 
 These four kernels represent common patterns in scientific HPC applications. Most partial differential
 equation solvers use patterns like Stencil and/or Synch\_p2p. Transpose proxies the data movement
-in Fast Fourier Transforms. AMR adds more realism to Stencil, and can be viewed as a proxy for S3D
+in Fast Fourier Transforms and other convolutions in particular, and global data redistribution in general.
+AMR adds more realism to Stencil, and can be viewed as a proxy for S3D
 \cite{Gamell:2014}.
 
 We turned these kernels into testbeds for Fenix by adding the following logic.
 All kernels do a number of nominally identical iterations, although the output arrays keep
 changing their values in subsequent iterations, due to the accumulation in the case of Stencil,
 Transpose, and AMR, and through a coupling of extremal grid values for Synch\_p2p
-(see \cite{van2016comparing}.
+(see \cite{van2016comparing}).
 The user specifies for each kernel the average number of iterations between rank failures,
 the number of ranks that fail during each failure event, and the number of ranks to be
 reserved by Fenix.
@@ -35,9 +36,6 @@ Control is then returned to \texttt{Fenix\_Init} by the library and the damaged 
 are repaired.
 At this stage we are not concerned with the data recovery utilities of Fenix (these will be
 added and evaluated later), so we use the analytical solutions that exist for all the PRK to (re-)initialize
-all ranks after a failure.
-
-All four kernels operate on 2D arrays.
-We vary the sizes of the arrays from $900^2$ to $57600^2$.
+all ranksd, including replaced ranks, after a failure.
 
 

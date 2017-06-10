@@ -1,14 +1,15 @@
 \section{ULFM and Fenix}\label{sec:implem}
-ULFM adds a small set of functions to the MPI standard.
+The ULFM proposal adds a small set of functions to the MPI standard.
 They enable users to return a program to a consistent state after a failure occurs.
-The ULFM functions of use to Fenix are MPI\_Comm\_shrink, MPI\_Comm\_revoke, and MPI\_Comm\_agree.
+The ULFM functions of use to Fenix are \texttt{MPI\_Comm\_shrink},
+\texttt{MPI\_Comm\_revoke}, and \texttt{MPI\_Comm\_agree}.
 These functions are invoked only when an error occurs, and hence do
 not add the the MPI critical path.
-However, ULFM requires that each non-local MPI call check an error code to
+However, ULFM requires that each non-local MPI call check an error code at least once to
 monitor the occurrence of communication or communicator failures.
 This overhead itself is strictly local, which means it is constant, regardless of the
-size of the communicator involved, or the network distance of any communicating rank(s).
-It is the only overhead that could affect performance of applications using
+size of the communicator involved, or the network distance between any communicating rank(s).
+It is the only overhead that may affect performance of applications using
 ULFM-enabled MPI.
 
 Fenix is a library \cite{fenixspec} that conveniently supports MPI process,
@@ -23,15 +24,16 @@ If the latter is left blank, Fenix will create an anonymous one, and will tacitl
 replace the communicator in any MPI call that matches the input communicator with
 the anonymous output communicator.
 When a failure occurs, control is transferred back to \texttt{Fenix\_Init}, which patches
-the resilient communicator with reserved ranks, utilizing among others functions
-defined by ULFM.
-It also automatically deletes any communicators that were derived from that base
+the resilient communicator with reserved ranks, utilizing, among others, functions
+provided by ULFM.
+It also automatically deletes any communicators that were derived from the resilient output
 communicator, and removes pending communication requests.
 These processes only occur in case of failure, so they do not increase MPI's critical
-path. However, other operations that Fenix carries out do add to it.
+path, although it is, of course, very important to make them as efficient as possible.
+However, other operations that Fenix carries out do add to the critica path.
 
 Fenix uses the MPI profiling interface (PMPI) to
-perform the following tasks whenever a non-trivial MPI call is made:
+perform one or more of the following tasks whenever a non-trivial MPI call is made:
 \begin{enumerate}
 \item check whether the library has been initialized.\label{item:init}
 \item check whether the communicator named in the operation should be replaced with

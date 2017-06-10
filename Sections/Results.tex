@@ -4,7 +4,7 @@ equipped with two 18-core
 Intel\regtm{} Xeon\regtm{} E5-2699 processors at 2.30GHz,
 with total memory of 64 GB.
 In all cases we used the Intel\regtm{} C compiler icc
-version 18.0.0, Intel\regtm{} MPI Library for Linux version 5.0.
+version 18.0.0.
 We note that for the purpose of this investigation--measuring runtime
 overheads when no failures occur--a shared memory system
 presents the toughest challenge for the fault-tolerance enhanced runtimes.
@@ -24,7 +24,9 @@ We note that the version of OpenMPI that accommodates ULFM is not the latest pro
 version.
 Finally, we also do runs with the Intel\regtm{} MPI library (for Linux, version 5.0),
 which is presumed to perform best of all MPI runtimes on an Intel-based system.
-All kernels operate on 2D (distributed) arrays that correspond to 2D grids or matrices.
+
+All four kernels operate on 2D (distributed) arrays that correspond to 2D square grids or
+squre matrices.
 We pick a the following set of array sizes: 900, 1800, 3600, 7200, 14400, 28800,
 57600.
 For AMR we also need to pick a collection of sizes and a refinement level for the refinements.
@@ -36,12 +38,17 @@ We apply policy FINE\_GRAIN to assign work on the refinements to ranks, which
 means that all participate whenever a refinement appears, and set the refinement level to 0.
 Consequently, granularity on the refinement is a fourth of that on the background grid.
 
+Each data point was obtained by executing the same workload 20 times and recording the
+average performance across those 20 runs.
+The number of iterations of the runs was varied, such that the total timed
+section was always at least 5 seconds.
+
 Initial experiments showed a large performance deficit for Fenix (label ``Fenix\_setjmp'')
 compared to the other runtimes for the Stencil kernel.
 We traced that to the fact that \texttt{Fenix\_Init}--which is implemented as a macro to
 accommodate a jump from wherever in the application an error is encountered back
 to \texttt{Fenix\_Init}, using the C \texttt{setjmp} instruction--occurs in the
-main program that also contains all the timed section of the code.
+main program that also contains the complete timed section of the code.
 Although \texttt{Fenix\_Init} itself is not timed in case of no errors, its mere occurrence
 in the same lexical scope as the timed code prevents many compiler optimizations from
 taking place.
@@ -62,7 +69,7 @@ As expected, the highly optimized Intel MPI runtime performs best.
 We repeat the experiment for the Synch\_p2p kernel, see Figure \ref{fig:p2p}.
 Most notable is the fact that even for the finest grid of $900^2$ points,
 overhead of Fenix relative to OpenMPI and ULFM, is negligible.
-In this case we note that the \texttt{setjmp} fix does not make that much
+In this case we note that the \texttt{setjmp} fix does not make much
 difference.
 The reason is that the loop carried dependence in the time consuming part of
 the kernel prohibits many compiler optimizations, including vectorization.
@@ -75,6 +82,13 @@ but that effect is offset by the fact that the whole grid fits in the L2 cache.
 Once the data set spills out of that, the code becomes bandwidth bound and
 performance decreases.
 
+We observe that there is some divergence of the performance curves of
+OpenMPI, ULFM, and Fenix in the mid range of grid sizes.
+This effect is not due to overheads incurred by the tests or maintenance
+of internal data structures carried out by ULFM and Fenix, since these
+overheads are fixed, and hence have the greatest impact at the finest
+granularity.
+
 \begin{figure}
   \centering
   \includegraphics[width=\columnwidth]{p2p_overheads-crop.pdf}
@@ -86,7 +100,7 @@ The Transpose kernel exhibits an interesting performance difference between
 Intel MPI and the OpenMPI-based runtimes for the smallest grids.
 At the left (fine-grain) part of the spectrum in Figure \ref{fig:transpose}
 it is obvious that the shared memory implementation of the Intel runtime has
-been well optimized for an all-to-all communicationb pattern with many small
+been well optimized for an all-to-all communication pattern with many small
 messages.
 This advantage disappears for larger matrices.
 However, we again see that there is virtually no noticeable performance
@@ -108,3 +122,26 @@ OpenMPI for this workload.
   \caption{Performance of AMR kernel}
   \label{fig:AMR}
 \end{figure}
+
+All kernels except \texttt{Synch\_p2p} employ asynchronous communications,
+which require storage and retrieval of communication requests in
+data structures maintained by Fenix.
+While those tasks are non-trivial, they can be carried out quickly enough that
+their effect on the kernels' performance can be ignored.
+
+To demonstrate effectiveness of Fenix for the purpose for which it was designed,
+we also ran the Stencil code while injecting errors with user-prescribed
+frequency.
+We selected a medium size grid of $20000^2$ points and ran the code for 200
+iterations on an allocation of 36 ranks, of which 6 were kept in reserve.
+With a prescribed average of 30 iterations between single-rank failures, the
+code would deplete all its 6 spare ranks during the run.
+The average time per iteration over 20 runs was 0.203 seconds, which comes
+down to one error injected every 6.8 seconds.
+Without error injection, using the same number of iterations and the same
+number of runs, the average time spent per iteration was actually slightly
+higher at 0.206 seconds.
+This means that even at an error injection rate of once every 6.8 seconds,
+process recovery on this 36-core workstation is effectively free.
+We caution, however, that the real test will be on large clusters,
+where the cost of error propagation and communicator repair will be non-trivial.
